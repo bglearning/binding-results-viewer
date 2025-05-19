@@ -13,7 +13,7 @@ st.set_page_config(page_title="Clip Binding Results Explorer", layout="wide")
 # Create sample data if needed
 # @st.cache_data
 def all_runs():
-    with open("wandb_results_05_13_full.json") as f:
+    with open("wandb_results_05_19_full.json") as f:
         wandb_results = json.load(f)
     return wandb_results
 
@@ -26,6 +26,7 @@ st.sidebar.header("Filter Controls")
 VARS_OF_INTEREST_ = ['TRAIN_CAPTION_MODE', 'IMG_OBJECT_INCLUSION_PROB', 'SALIENCY_PROB']
 BATCH_SIZES_ = [16, 32, 64, 128, 256]
 EMBED_DIMS_ = [32, 64, 128, 256]
+TEST_DISTS_NUM_ATTRS = ['always_three_four', 'skewed_to_one']
 
 # Extract unique values for each parameter
 variables = sorted(VARS_OF_INTEREST_)
@@ -52,6 +53,17 @@ with st.sidebar:
         options=embed_dims,
         key="embed_selector"
     )
+
+    test_dist_num_attrs = st.radio(
+        "Test Dist (Num-attrs):",
+        options=TEST_DISTS_NUM_ATTRS,
+        key="test_dist_selector"
+    )
+
+SWAP_METRIC = {
+    'always_three_four': 'swap-mid-acc',
+    'skewed_to_one': 'swap-skt1-acc'
+}[test_dist_num_attrs]
 
 # Display metrics
 # st.header(f"Metrics for {VAR_OF_INTEREST} (Batch Size: {batch_size}, Embed Dim: {embed_dim})")
@@ -177,7 +189,7 @@ for run in sel_runs:
     print(run['name'])
 
 underlying_df = (
-   full_results['test-in']['swap-mid-acc'].map(lambda x: ','.join([f'{v:.3f}' for v in x])).T
+   full_results['test-in'][SWAP_METRIC].map(lambda x: ','.join([f'{v:.3f}' for v in x])).T
 )
 underlying_recog_df = (
    full_results['test-in']['recog-multi'].map(lambda x: ','.join([f'{v:.3f}' for v in x])).T
@@ -187,8 +199,8 @@ for test_dist in ('test-in', 'test-out'):
     for metric in ('swap-mid-acc', 'swap-skt1-acc', 'recog-multi'):
         full_results[test_dist][metric] = process_distr_df(full_results[test_dist][metric], test_dist)
 
-mean_df = full_results['test-in']['swap-mid-acc'][0]
-std_df = full_results['test-in']['swap-mid-acc'][1]
+mean_df = full_results['test-in'][SWAP_METRIC][0]
+std_df = full_results['test-in'][SWAP_METRIC][1]
 
 # Create and display plot
 # st.header("Data Visualization")
@@ -242,7 +254,7 @@ if len(sel_runs) > 0:
             dist=dist,
             errs_df=std_df_recog,
         )
-        mdf, std_df = full_results[dist]['swap-mid-acc']
+        mdf, std_df = full_results[dist][SWAP_METRIC]
         mdf_ = pd.DataFrame(np.where(mdf_recog.loc[mdf.index, mdf.columns] > RECOG_ACC_LIMIT, mdf.values, np.nan), columns=mdf.columns, index=mdf.index)
         std_df_ = pd.DataFrame(np.where(mdf_recog.loc[std_df.index, std_df.columns] > RECOG_ACC_LIMIT, std_df.values, np.nan), columns=std_df.columns, index=std_df.index)
         mdf_ = mdf_.dropna(axis=0, how='all')
