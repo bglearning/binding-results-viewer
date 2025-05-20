@@ -17,7 +17,13 @@ def all_runs():
         wandb_results = json.load(f)
     return wandb_results
 
+def all_runs_acc():
+    with open("recog-swap-accuracies_05_19_full.json") as f:
+        recog_swap_accuracies = json.load(f)
+    return recog_swap_accuracies
+
 wandb_results = all_runs()
+recog_swap_accuracies = all_runs_acc()
 
 # Sidebar for controls
 st.sidebar.header("Filter Controls")
@@ -27,6 +33,7 @@ VARS_OF_INTEREST_ = ['TRAIN_CAPTION_MODE', 'IMG_OBJECT_INCLUSION_PROB', 'SALIENC
 BATCH_SIZES_ = [16, 32, 64, 128, 256]
 EMBED_DIMS_ = [32, 64, 128, 256]
 TEST_DISTS_NUM_ATTRS = ['always_three_four', 'skewed_to_one']
+MAIN_METRICS_OPTIONS = ['recog_swap', 'always_three_four', 'skewed_to_one']
 
 # Extract unique values for each parameter
 variables = sorted(VARS_OF_INTEREST_)
@@ -35,7 +42,7 @@ embed_dims = sorted(EMBED_DIMS_)
 
 with st.sidebar:
     TAKE_ATTRIBUTE_AVERAGE = st.checkbox("Aggregate Attrs")
-    RECOG_ACC_LIMIT = st.number_input("Recognition Acc Cutoff", min_value=0.5, max_value=1.0, value=0.7, step=0.05)
+    RECOG_ACC_LIMIT = st.number_input("Recognition Acc Cutoff", min_value=0.1, max_value=1.0, value=0.2, step=0.05)
     VAR_OF_INTEREST = st.radio(
         "Variable of Interest:",
         options=variables,
@@ -54,16 +61,23 @@ with st.sidebar:
         key="embed_selector"
     )
 
-    test_dist_num_attrs = st.radio(
-        "Test Dist (Num-attrs):",
-        options=TEST_DISTS_NUM_ATTRS,
-        key="test_dist_selector"
+    main_metric = st.radio(
+        "Main Metric:",
+        options=MAIN_METRICS_OPTIONS,
+        key="main_metric"
     )
 
 SWAP_METRIC = {
+    'recog_swap': 'recog-swap',
     'always_three_four': 'swap-mid-acc',
-    'skewed_to_one': 'swap-skt1-acc'
-}[test_dist_num_attrs]
+    'skewed_to_one': 'swap-skt1-acc',
+}[main_metric]
+
+RECOG_METRIC = {
+    'recog-swap': 'recog-both',
+    'swap-mid-acc': 'recog-multi',
+    'swap-skt1-acc': 'recog-multi',
+}[SWAP_METRIC]
 
 # Display metrics
 # st.header(f"Metrics for {VAR_OF_INTEREST} (Batch Size: {batch_size}, Embed Dim: {embed_dim})")
@@ -116,11 +130,15 @@ full_results = {
         'swap-mid-acc': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
         'swap-skt1-acc': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
         'recog-multi': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
+        'recog-both': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
+        'recog-swap': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
     },
     'test-out': {
         'swap-mid-acc': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
         'swap-skt1-acc': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
         'recog-multi': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
+        'recog-both': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
+        'recog-swap': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
     }
 }
 
@@ -143,6 +161,14 @@ for dist_name, dist in CAPTION_MODE_NUM_ATTR_DISTS.items():
     expected_num = sum(i * p for i, p in enumerate(dist))
     EXPECTED_NUM_ATTRS[dist_name] = expected_num
 
+def get_attr_metric(recog_swap_accuracies_, wandb_name, attr, metric):
+    if wandb_name not in recog_swap_accuracies_:
+        return np.nan
+    if attr not in recog_swap_accuracies_[wandb_name]:
+        return np.nan
+    return recog_swap_accuracies_[wandb_name][attr].get(metric, np.nan)
+
+
 for test_dist in ('test-in', 'test-out'):
     for r in sel_runs:
         for attr in attrs:
@@ -154,6 +180,9 @@ for test_dist in ('test-in', 'test-out'):
             dist_tag = '-test-in' if test_dist == 'test-in' else ''
             full_results[test_dist]['swap-mid-acc'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(r['summary'].get(f'binary-swap-mid{dist_tag}_{attr}', np.nan)))
             full_results[test_dist]['swap-skt1-acc'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(r['summary'].get(f'binary-swap-skt1{dist_tag}_{attr}', np.nan)))
+            if test_dist == 'test-in':
+                full_results[test_dist]['recog-both'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies, r['name'], attr, 'recog_acc')))
+                full_results[test_dist]['recog-swap'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies, r['name'], attr, 'swap_acc')))
             # swap_skt1_acc_df.loc[r.config[VAR_OF_INTEREST], attr] = float(r.summary[f'binary-swap-skt1-test-in_{attr}'])
 
     if VAR_OF_INTEREST == 'TRAIN_CAPTION_MODE':
@@ -192,11 +221,14 @@ underlying_df = (
    full_results['test-in'][SWAP_METRIC].map(lambda x: ','.join([f'{v:.3f}' for v in x])).T
 )
 underlying_recog_df = (
-   full_results['test-in']['recog-multi'].map(lambda x: ','.join([f'{v:.3f}' for v in x])).T
+   full_results['test-in'][RECOG_METRIC].map(lambda x: ','.join([f'{v:.3f}' for v in x])).T
 )
 
+print(underlying_recog_df)
+print(underlying_df)
+
 for test_dist in ('test-in', 'test-out'):
-    for metric in ('swap-mid-acc', 'swap-skt1-acc', 'recog-multi'):
+    for metric in ('swap-mid-acc', 'swap-skt1-acc', 'recog-multi', 'recog-both', 'recog-swap'):
         full_results[test_dist][metric] = process_distr_df(full_results[test_dist][metric], test_dist)
 
 mean_df = full_results['test-in'][SWAP_METRIC][0]
@@ -236,17 +268,22 @@ def plot_fig(data_df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist=
     # ax.grid()
 
 if len(sel_runs) > 0:
-    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+    dists_to_plot = ['test-in', 'test-out']
+    if SWAP_METRIC == 'recog-swap':
+        dists_to_plot = ['test-in']
+
+    fig, axes = plt.subplots(2, len(dists_to_plot), figsize=(8 * len(dists_to_plot), 10))
     fig.subplots_adjust(hspace=0.1, wspace=0.1)
 
-    for i, dist in enumerate(['test-in', 'test-out']):
+    for i, dist in enumerate(dists_to_plot):
         dist_label = f"[{dist.split('-')[-1]}]"
-        mdf_recog, std_df_recog = full_results[dist]['recog-multi']
+        mdf_recog, std_df_recog = full_results[dist][RECOG_METRIC]
+        ax_ = axes[0, i] if len(dists_to_plot) > 1 else axes[0]
         plot_fig(
             mdf_recog,
             xlabel='',
             ylabel="Recognition (multi-object-scene) " if i == 0 else '',
-            ax=axes[0, i],
+            ax=ax_,
             title=f'{dist_label}-distribution',
             xlims=X_LIMS,
             ylims=(0, 1.01),
@@ -261,12 +298,13 @@ if len(sel_runs) > 0:
         mdf_ = mdf_.dropna(axis=1, how='all')
         std_df_ = std_df_.dropna(axis=0, how='all')
         std_df_ = std_df_.dropna(axis=1, how='all')
+        ax_ = axes[1, i] if len(dists_to_plot) > 1 else axes[1]
         plot_fig(
             mdf_,
             # full_results[dist]['swap-mid-acc'],
             xlabel=X_LABEL,
             ylabel="Binary swap accuracy" if i == 0 else '',
-            ax=axes[1, i],
+            ax=ax_,
             title='',
             xlims=X_LIMS,
             ylims=(0.2, 1.0),
