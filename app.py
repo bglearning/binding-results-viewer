@@ -20,10 +20,12 @@ def all_runs():
 def all_runs_acc():
     with open("recog-swap-accuracies_05_19_full.json") as f:
         recog_swap_accuracies = json.load(f)
-    return recog_swap_accuracies
+    with open("recog-swap-accuracies-test-out_05_19_full.json") as f:
+        recog_swap_accuracies_out = json.load(f)
+    return recog_swap_accuracies, recog_swap_accuracies_out
 
 wandb_results = all_runs()
-recog_swap_accuracies = all_runs_acc()
+recog_swap_accuracies, recog_swap_accuracies_out = all_runs_acc()
 
 # Sidebar for controls
 st.sidebar.header("Filter Controls")
@@ -42,6 +44,7 @@ embed_dims = sorted(EMBED_DIMS_)
 
 with st.sidebar:
     TAKE_ATTRIBUTE_AVERAGE = st.checkbox("Aggregate Attrs")
+    DISPLAY_ONLY_TEST_IN = st.checkbox("Only test-in")
     RECOG_ACC_LIMIT = st.number_input("Recognition Acc Cutoff", min_value=0.1, max_value=1.0, value=0.2, step=0.05)
     VAR_OF_INTEREST = st.radio(
         "Variable of Interest:",
@@ -188,6 +191,10 @@ for test_dist in ('test-in', 'test-out'):
                 full_results[test_dist]['recog-both'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies, r['name'], attr, 'recog_acc')))
                 full_results[test_dist]['recog-swap-cond'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies, r['name'], attr, 'swap_acc_cond')))
                 full_results[test_dist]['recog-swap-uncond'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies, r['name'], attr, 'swap_acc_uncond')))
+            else:
+                full_results[test_dist]['recog-both'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies_out, r['name'], attr, 'recog_acc')))
+                full_results[test_dist]['recog-swap-cond'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies_out, r['name'], attr, 'swap_acc_cond')))
+                full_results[test_dist]['recog-swap-uncond'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies_out, r['name'], attr, 'swap_acc_uncond')))
             # swap_skt1_acc_df.loc[r.config[VAR_OF_INTEREST], attr] = float(r.summary[f'binary-swap-skt1-test-in_{attr}'])
 
     if VAR_OF_INTEREST == 'TRAIN_CAPTION_MODE':
@@ -273,9 +280,9 @@ def plot_fig(data_df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist=
     # ax.grid()
 
 if len(sel_runs) > 0:
-    dists_to_plot = ['test-in', 'test-out']
-    if SWAP_METRIC in ('recog-swap-cond', 'recog-swap-uncond'):
-        dists_to_plot = ['test-in']
+    dists_to_plot = ['test-in'] if DISPLAY_ONLY_TEST_IN else ['test-in', 'test-out']
+    # if SWAP_METRIC in ('recog-swap-cond', 'recog-swap-uncond'):
+        # dists_to_plot = ['test-in']
 
     fig, axes = plt.subplots(2, len(dists_to_plot), figsize=(8 * len(dists_to_plot), 10))
     fig.subplots_adjust(hspace=0.1, wspace=0.1)
