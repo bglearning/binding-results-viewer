@@ -13,14 +13,14 @@ st.set_page_config(page_title="Clip Binding Results Explorer", layout="wide")
 # Create sample data if needed
 # @st.cache_data
 def all_runs():
-    with open("wandb_results_05_19_full.json") as f:
+    with open("wandb_results_05_26_full.json") as f:
         wandb_results = json.load(f)
     return wandb_results
 
 def all_runs_acc():
-    with open("recog-swap-accuracies_05_19_full.json") as f:
+    with open("recog-swap-accuracies_05_26_full.json") as f:
         recog_swap_accuracies = json.load(f)
-    with open("recog-swap-accuracies-test-out_05_19_full.json") as f:
+    with open("recog-swap-accuracies-test-out_05_26_full.json") as f:
         recog_swap_accuracies_out = json.load(f)
     return recog_swap_accuracies, recog_swap_accuracies_out
 
@@ -30,9 +30,9 @@ recog_swap_accuracies, recog_swap_accuracies_out = all_runs_acc()
 # Sidebar for controls
 st.sidebar.header("Filter Controls")
 
-VARS_OF_INTEREST_ = ['TRAIN_CAPTION_MODE', 'CAPTION_OBJECT_INCLUSION_PROB', 'IMG_OBJECT_INCLUSION_PROB', 'SALIENCY_PROB']
+VARS_OF_INTEREST_ = ['CAPTION_OBJECT_INCLUSION_PROB', 'IMG_OBJECT_INCLUSION_PROB', 'SALIENCY_PROB', 'TRAIN_CAPTION_MODE']
 # VARS_OF_INTEREST_ = ['TRAIN_CAPTION_MODE', 'IMG_OBJECT_INCLUSION_PROB', 'SALIENCY_PROB']
-BATCH_SIZES_ = [16, 32, 64, 128, 256]
+BATCH_SIZES_ = [8, 16, 32, 64, 128, 256]
 EMBED_DIMS_ = [32, 64, 128, 256]
 TEST_DISTS_NUM_ATTRS = ['always_three_four', 'skewed_to_one']
 MAIN_METRICS_OPTIONS = ['swap_conditional', 'swap_unconditional', 'always_three_four', 'skewed_to_one']
@@ -89,7 +89,7 @@ RECOG_METRIC = {
 
 VAR_VALUES = {
     # 'TRAIN_CAPTION_MODE': ['skewed_to_zero', 'skewed_to_one', 'high_two', 'high_two_five', 'high_five', 'skewed_to_full'],
-    'TRAIN_CAPTION_MODE': ['skewed_to_zero', 'skewed_to_one', 'high_two', 'high_five', 'skewed_to_full'],
+    'TRAIN_CAPTION_MODE': ['skewed_to_zero', 'skewed_to_one', 'high_two', 'high_two_five', 'high_five', 'skewed_to_full'],
     # 'CAPTION_OBJECT_INCLUSION_PROB': [0.1, 0.25, 0.5, 0.75, 0.9, 1.],
     'CAPTION_OBJECT_INCLUSION_PROB': [0.1, 0.25, 0.5, 0.75, 1.],
     # 'IMG_OBJECT_INCLUSION_PROB': [0.1, 0.25, 0.5, 0.75, 0.9, 1.],
@@ -221,8 +221,8 @@ def process_df(df_, distr):
 
 
 def process_distr_df(df_, distr):
-    mean_df = process_df(df_.map(lambda x: np.mean(x) if isinstance(x, list) else x), distr)
-    std_df = process_df(df_.map(lambda x: np.std(x) if isinstance(x, list) else x), distr)
+    mean_df = process_df(df_.map(lambda x: np.mean([x_val for x_val in x if not np.isnan(x_val)]) if isinstance(x, list) else x), distr)
+    std_df = process_df(df_.map(lambda x: np.std([x_val for x_val in x if not np.isnan(x_val)]) if isinstance(x, list) else x), distr)
     return mean_df, std_df
 
 
