@@ -30,15 +30,42 @@ def plot_fig_new(df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist='
                     capsize=4, capthick=1, alpha=0.6,
                     markerfacecolor='white', markeredgecolor=colors[i],
                     markeredgewidth=2)
-        # Plot normal points with full opacity (using only color differences, circle markers)
+
+        # Plot normal points in continuous segments
+        attr_indices = attr_data['x'].tolist()
         if not normal_data.empty:
-            ax.errorbar(normal_data['x'], normal_data['y'], 
-                    yerr=normal_data['error'],
-                    color=colors[i], linestyle='-', 
-                    marker='o', markersize=8, linewidth=2.5,
-                    capsize=4, capthick=2, alpha=1.0,
-                    label=attr.replace('_', ' ').title())
-        
+            # Find continuous segments based on attr_indices
+            normal_x_values = normal_data['x'].tolist()
+            segments = []
+            current_segment_indices = []
+            
+            for attr_idx in attr_indices:
+                if attr_idx in normal_x_values:
+                    # This x value has normal recognition
+                    row_idx = normal_data[normal_data['x'] == attr_idx].index[0]
+                    current_segment_indices.append(row_idx)
+                else:
+                    # Gap found - end current segment if it exists
+                    if current_segment_indices:
+                        segments.append(current_segment_indices)
+                        current_segment_indices = []
+            
+            # Add the last segment if it exists
+            if current_segment_indices:
+                segments.append(current_segment_indices)
+            
+            # Plot each segment separately
+            for j, segment_indices in enumerate(segments):
+                if len(segment_indices) > 0:  # Only plot if segment has points
+                    segment_data = attr_data.loc[segment_indices]
+                    label = attr.replace('_', ' ').title() if j == 0 else None  # Only label first segment
+                    
+                    ax.errorbar(segment_data['x'], segment_data['y'], 
+                            yerr=segment_data['error'],
+                            color=colors[i], linestyle='-', 
+                            marker='o', markersize=8, linewidth=2.5,
+                            capsize=4, capthick=2, alpha=1.0,
+                            label=label)
 
     # Calculate and plot average line
     avg_data = df[df['attribute'] == 'Average']

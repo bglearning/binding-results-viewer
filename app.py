@@ -295,8 +295,12 @@ def convert_wide_to_plot_format(
         for x_val in x_values:
             # Get binding accuracy and error
             binding_acc = mdf_binding.loc[x_val, attr]
-            binding_error = std_df_binding.loc[x_val, attr]
-            
+            try:
+                binding_error = std_df_binding.loc[x_val, attr]
+            except KeyError:
+                print(f'KeyError: {x_val}')
+                binding_error = 0.
+
             # Get recognition accuracy (handle missing values)
             try:
                 recognition_acc = mdf_recog.loc[x_val, attr]
