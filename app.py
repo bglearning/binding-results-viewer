@@ -1,6 +1,7 @@
 import json
 import streamlit as st
 import pandas as pd
+import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -32,7 +33,7 @@ st.sidebar.header("Filter Controls")
 
 VARS_OF_INTEREST_ = ['CAPTION_OBJECT_INCLUSION_PROB', 'IMG_OBJECT_INCLUSION_PROB', 'SALIENCY_PROB', 'TRAIN_CAPTION_MODE']
 # VARS_OF_INTEREST_ = ['TRAIN_CAPTION_MODE', 'IMG_OBJECT_INCLUSION_PROB', 'SALIENCY_PROB']
-BATCH_SIZES_ = [8, 16, 32, 64, 128, 256]
+BATCH_SIZES_ = [16, 32, 64, 128, 256]
 EMBED_DIMS_ = [32, 64, 128, 256]
 TEST_DISTS_NUM_ATTRS = ['always_three_four', 'skewed_to_one']
 MAIN_METRICS_OPTIONS = ['swap_conditional', 'swap_unconditional', 'always_three_four', 'skewed_to_one']
@@ -44,7 +45,7 @@ embed_dims = sorted(EMBED_DIMS_)
 
 with st.sidebar:
     TAKE_ATTRIBUTE_AVERAGE = st.checkbox("Aggregate Attrs")
-    DISPLAY_ONLY_TEST_IN = st.checkbox("Only test-in")
+    DISPLAY_TEST_OUT = st.checkbox("Also test-out")
     RECOG_ACC_LIMIT = st.number_input("Recognition Acc Cutoff", min_value=0.1, max_value=1.0, value=0.2, step=0.05)
     VAR_OF_INTEREST = st.radio(
         "Variable of Interest:",
@@ -112,7 +113,7 @@ X_LIMS = {
 }[VAR_OF_INTEREST]
 
 X_LABEL = {
-    'TRAIN_CAPTION_MODE': 'Expected-Num-Attributes',
+    'TRAIN_CAPTION_MODE': 'Expected Number of Attributes',
     'CAPTION_OBJECT_INCLUSION_PROB': 'Caption Two-object Probability',
     'IMG_OBJECT_INCLUSION_PROB': 'Image Two-object Probability',
     'SALIENCY_PROB': 'Saliency Probability'
@@ -209,14 +210,10 @@ def process_df(df_, distr):
     df_ = df_.loc[:, (df_ != 0).any(axis=0)]
     if df_.empty:
         return df_
-    if TAKE_ATTRIBUTE_AVERAGE and distr == 'test-in':
-        df_new = pd.DataFrame(
-            {
-                'Attributes_Avg': df_[[col for col in df_.columns if col != 'object']].mean(axis=1),
-                'object': df_['object']
-            }
-        )
-        df_ = df_new
+
+    df_ = df_.drop(columns=['object'])
+    df_['Average'] = df_[[col for col in df_.columns]].mean(axis=1)
+
     return df_
 
 
@@ -279,17 +276,201 @@ def plot_fig(data_df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist=
     ax.set_ylabel(ylabel, fontsize=LABEL_SIZES, labelpad=15)
     # ax.grid()
 
+
+def convert_wide_to_plot_format(
+    mdf_recog, std_df_recog, mdf_binding, std_df_binding, 
+    recognition_threshold=0.6):
+    
+    data_list = []
+    
+    # Get x values from index
+    x_values = mdf_binding.index.tolist()
+    
+    all_attributes = [col for col in mdf_binding.columns]
+    
+    # Process each attribute
+    for attr in all_attributes:
+        for x_val in x_values:
+            # Get binding accuracy and error
+            binding_acc = mdf_binding.loc[x_val, attr]
+            binding_error = std_df_binding.loc[x_val, attr]
+            
+            # Get recognition accuracy (handle missing values)
+            try:
+                recognition_acc = mdf_recog.loc[x_val, attr]
+                recognition_error = std_df_recog.loc[x_val, attr]
+            except (KeyError, IndexError):
+                # If recognition data is missing, assume high recognition
+                recognition_acc = 1.0
+                recognition_error = 0.0
+            
+            # Determine if recognition is low
+            low_recognition = recognition_acc < recognition_threshold
+            
+            data_list.append({
+                'x': x_val,
+                'y': binding_acc,
+                'error': binding_error,
+                'attribute': attr,
+                'recognition': recognition_acc,
+                'recognition_error': recognition_error,
+                'low_recognition': low_recognition if attr != 'Average' else False
+            })
+    
+    # Create DataFrame
+    df = pd.DataFrame(data_list)
+    
+    return df
+
+
+def plot_fig_new(df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist='test-in'):
+    attributes = [a for a in df['attribute'].unique() if a != 'Average']
+
+    # Plot each attribute
+    for i, attr in enumerate(attributes):
+        attr_data = df[df['attribute'] == attr]
+        
+        # Separate normal and low recognition points
+        normal_data = attr_data[~attr_data['low_recognition']]
+        # low_rec_data = attr_data[attr_data['low_recognition']]
+        low_rec_data = attr_data
+        
+        # Plot low recognition points with visual caveats
+        if not low_rec_data.empty:
+            # Hollow markers with dashed lines for low recognition
+            ax.errorbar(low_rec_data['x'], low_rec_data['y'], 
+                    yerr=low_rec_data['error'],
+                    color=colors[i], linestyle=':', 
+                    marker='o', markersize=8, linewidth=1.5,
+                    capsize=4, capthick=1, alpha=0.6,
+                    markerfacecolor='white', markeredgecolor=colors[i],
+                    markeredgewidth=2)
+        # Plot normal points with full opacity (using only color differences, circle markers)
+        if not normal_data.empty:
+            ax.errorbar(normal_data['x'], normal_data['y'], 
+                    yerr=normal_data['error'],
+                    color=colors[i], linestyle='-', 
+                    marker='o', markersize=8, linewidth=2.5,
+                    capsize=4, capthick=2, alpha=1.0,
+                    label=attr.replace('_', ' ').title())
+        
+
+    # Calculate and plot average line
+    avg_data = df[df['attribute'] == 'Average']
+
+    ax.plot(avg_data['x'], avg_data['y'], 
+            color='black', linewidth=3, linestyle='-', 
+            marker='D', markersize=10, markerfacecolor='white', 
+            markeredgecolor='black', markeredgewidth=2,
+            label='Average', zorder=10)
+
+    ax.fill_between(avg_data['x'], 
+                    avg_data['y'] - avg_data['error'], 
+                    avg_data['y'] + avg_data['error'],
+                    color='black', alpha=0.1, zorder=5)
+
+    # Add chance level line (no text label, will be in legend)
+    ax.axhline(y=0.5, color='gray', linestyle='--', linewidth=2, alpha=0.8, zorder=1)
+
+    # Customize the plot
+    ax.set_xlabel(xlabel, fontsize=20, fontweight='bold')
+    ax.set_ylabel(ylabel, fontsize=20, fontweight='bold')
+    ax.set_title(title, fontsize=22, fontweight='bold', pad=20)
+
+    # Set axis limits and ticks
+    ax.set_xlim(xlims)
+    ax.set_ylim(ylims)
+    # ax.set_xticks([0.1, 0.25, 0.5, 0.75, 1.0])
+    if xtick:
+        # ticks = [(x if x != 0.95 else None) for x in data_df.index.unique().tolist()]
+        ticks = [x for x in df['x'].unique().tolist()]
+        ax.set_xticks(ticks)
+    # ax.set_yticks(np.arange(0.5, 1.1, 0.1))
+
+    # Improve grid
+    ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
+    ax.set_axisbelow(True)
+
+    # Create legend with recognition caveat explanation
+    legend_elements = []
+    # Add attribute lines to legend (all with circle markers, different colors)
+    for i, attr in enumerate(attributes):
+        legend_elements.append(plt.Line2D([0], [0], color=colors[i], 
+                                        linestyle='-', marker='o',
+                                        markersize=8, linewidth=2.5,
+                                        label=attr.replace('_', ' ').title()))
+
+    # Add average line (diamond marker)
+    legend_elements.append(plt.Line2D([0], [0], color='black', linestyle='-', 
+                                    marker='D', markersize=10, linewidth=3,
+                                    markerfacecolor='white', markeredgecolor='black',
+                                    label='Average'))
+
+    # Add chance level (square marker)
+    legend_elements.append(plt.Line2D([0], [0], color='gray', linestyle='--', 
+                                    marker=None, markersize=8, linewidth=2,
+                                    markerfacecolor='gray', markeredgecolor='gray',
+                                    label='Chance Level'))
+
+    # Add recognition caveat indicators
+    # legend_elements.append(plt.Line2D([0], [0], color='gray', linestyle=':', 
+    #                                 marker='o', markersize=8, linewidth=1.5,
+    #                                 markerfacecolor='white', markeredgecolor='gray',
+    #                                 markeredgewidth=2, alpha=0.6,
+    #                                 label='Low Recognition (<0.5)'))
+
+    # Create two-column legend
+    # legend1 = ax.legend(handles=legend_elements[:-1], loc='upper left', 
+    legend1 = ax.legend(handles=legend_elements, loc='upper left', 
+                    bbox_to_anchor=(0.02, 0.98), frameon=True, 
+                    fancybox=True, shadow=True, ncol=1, fontsize=11)
+    legend1.get_frame().set_facecolor('white')
+    legend1.get_frame().set_alpha(0.9)
+
+    # Add recognition caveat legend separately
+    # legend2 = ax.legend(handles=[legend_elements[-1]], loc='lower right', 
+    #                 bbox_to_anchor=(0.98, 0.02), frameon=True,
+    #                 fancybox=True, shadow=True, fontsize=11)
+    # legend2.get_frame().set_facecolor('lightyellow')
+    # legend2.get_frame().set_alpha(0.9)
+
+    # Add both legends to the plot
+    ax.add_artist(legend1)
+
+    # Add statistical annotation box
+    # textstr = '\n'.join([
+    #     'Error bars: ±1 SEM',
+    #     'n = 100 per condition',
+    #     'Hollow markers: recognition < 0.6'
+    # ])
+    # props = dict(boxstyle='round', facecolor='lightblue', alpha=0.8)
+    # ax.text(0.75, 0.25, textstr, transform=ax.transAxes, fontsize=10,
+    #         verticalalignment='top', bbox=props)
+
+    # Improve overall appearance
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.92)
+
+    # Add subtle background color
+    # ax.set_facecolor('#fafafa')
+
+    plt.show()
+
+
 if len(sel_runs) > 0:
-    dists_to_plot = ['test-in'] if DISPLAY_ONLY_TEST_IN else ['test-in', 'test-out']
+    dists_to_plot = ['test-in', 'test-out'] if DISPLAY_TEST_OUT else ['test-in']
     # if SWAP_METRIC in ('recog-swap-cond', 'recog-swap-uncond'):
         # dists_to_plot = ['test-in']
 
-    fig, axes = plt.subplots(2, len(dists_to_plot), figsize=(8 * len(dists_to_plot), 10))
+    fig, axes = plt.subplots(2, len(dists_to_plot), figsize=(16 * len(dists_to_plot), 20))
     fig.subplots_adjust(hspace=0.1, wspace=0.1)
 
     for i, dist in enumerate(dists_to_plot):
         dist_label = f"[{dist.split('-')[-1]}]"
         mdf_recog, std_df_recog = full_results[dist][RECOG_METRIC]
+
+        colors = sns.color_palette("husl", len(mdf_recog.columns))
+
         ax_ = axes[0, i] if len(dists_to_plot) > 1 else axes[0]
         plot_fig(
             mdf_recog,
@@ -303,28 +484,39 @@ if len(sel_runs) > 0:
             dist=dist,
             errs_df=std_df_recog,
         )
-        mdf, std_df = full_results[dist][SWAP_METRIC]
-        mdf_ = pd.DataFrame(np.where(mdf_recog.loc[mdf.index, mdf.columns] > RECOG_ACC_LIMIT, mdf.values, np.nan), columns=mdf.columns, index=mdf.index)
-        std_df_ = pd.DataFrame(np.where(mdf_recog.loc[std_df.index, std_df.columns] > RECOG_ACC_LIMIT, std_df.values, np.nan), columns=std_df.columns, index=std_df.index)
+        mdf_, std_df_ = full_results[dist][SWAP_METRIC]
+        # mdf_ = pd.DataFrame(np.where(mdf_recog.loc[mdf.index, mdf.columns] > RECOG_ACC_LIMIT, mdf.values, np.nan), columns=mdf.columns, index=mdf.index)
+        # std_df_ = pd.DataFrame(np.where(mdf_recog.loc[std_df.index, std_df.columns] > RECOG_ACC_LIMIT, std_df.values, np.nan), columns=std_df.columns, index=std_df.index)
         mdf_ = mdf_.dropna(axis=0, how='all')
         mdf_ = mdf_.dropna(axis=1, how='all')
         std_df_ = std_df_.dropna(axis=0, how='all')
         std_df_ = std_df_.dropna(axis=1, how='all')
         ax_ = axes[1, i] if len(dists_to_plot) > 1 else axes[1]
-        plot_fig(
-            mdf_,
-            # full_results[dist]['swap-mid-acc'],
+
+        # Convert your data
+        df = convert_wide_to_plot_format(
+            mdf_recog=mdf_recog,
+            std_df_recog=std_df_recog, 
+            mdf_binding=mdf_,  # Your binding accuracy dataframe
+            std_df_binding=std_df_,  # Your binding std dataframe
+            recognition_threshold=0.5
+        )
+
+        print('Unique x', df['x'].unique())
+
+        plot_fig_new(
+            df,
+            ax=ax_,
             xlabel=X_LABEL,
             ylabel="Binary swap accuracy" if i == 0 else '',
-            ax=ax_,
-            title='',
+            # title=f'Effect of {X_LABEL} on Binding \nb{batch_size} e{embed_dim}',
+            title=f'Effect of {X_LABEL} on Attribute Binding',
             xlims=X_LIMS,
-            ylims=(0.2, 1.0),
+            ylims=(0.3, 1.0),
             xtick=True,
             dist=dist,
-            static_at=0.5,
-            errs_df=std_df_,
         )
+
     plt.suptitle(f'Effect of {X_LABEL} on Binding and Recognition\nb{batch_size} e{embed_dim}', fontsize=18)
     # plt.savefig(f'{X_LABEL}-{WANDB_TAG}_b256-E128.png', bbox_inches='tight', dpi=300)
     # plt.show()
