@@ -16,12 +16,12 @@ st.set_page_config(page_title="Clip Binding Results Explorer", layout="wide")
 # Create sample data if needed
 # @st.cache_data
 def all_runs():
-    with open("wandb_results_06_01_full.json") as f:
+    with open("wandb_results_06_01_v2_full.json") as f:
         wandb_results = json.load(f)
     return wandb_results
 
 def all_runs_acc():
-    with open("recog-swap-accuracies_06_01_full.json") as f:
+    with open("recog-swap-accuracies-test-in_06-01-v2b.json") as f:
         recog_swap_accuracies = json.load(f)
     with open("recog-swap-accuracies-test-out_05_26_full.json") as f:
         recog_swap_accuracies_out = json.load(f)
@@ -38,7 +38,7 @@ VARS_OF_INTEREST_ = ['CAPTION_OBJECT_INCLUSION_PROB', 'IMG_OBJECT_INCLUSION_PROB
 BATCH_SIZES_ = [16, 32, 64, 128, 256]
 EMBED_DIMS_ = [32, 64, 128, 256]
 TEST_DISTS_NUM_ATTRS = ['always_three_four', 'skewed_to_one']
-MAIN_METRICS_OPTIONS = ['swap_conditional', 'swap_unconditional', 'always_three_four', 'skewed_to_one']
+MAIN_METRICS_OPTIONS = ['swap_conditional', 'swap_conditional (attr & obj)', 'swap_unconditional', 'always_three_four', 'skewed_to_one']
 
 # Extract unique values for each parameter
 variables = sorted(VARS_OF_INTEREST_)
@@ -75,6 +75,7 @@ with st.sidebar:
 
 SWAP_METRIC = {
     'swap_conditional': 'recog-swap-cond',
+    'swap_conditional (attr & obj)': 'recog-swap-cond2',
     'swap_unconditional': 'recog-swap-uncond',
     'always_three_four': 'swap-mid-acc',
     'skewed_to_one': 'swap-skt1-acc',
@@ -82,6 +83,7 @@ SWAP_METRIC = {
 
 RECOG_METRIC = {
     'recog-swap-cond': 'recog-both',
+    'recog-swap-cond2': 'recog-both',
     'recog-swap-uncond': 'recog-both',
     'swap-mid-acc': 'recog-multi',
     'swap-skt1-acc': 'recog-multi',
@@ -140,6 +142,7 @@ full_results = {
         'recog-multi': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
         'recog-both': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
         'recog-swap-cond': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
+        'recog-swap-cond2': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
         'recog-swap-uncond': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
     },
     'test-out': {
@@ -148,6 +151,7 @@ full_results = {
         'recog-multi': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
         'recog-both': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
         'recog-swap-cond': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
+        'recog-swap-cond2': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
         'recog-swap-uncond': pd.DataFrame([[[] for _ in range(n_cols)] for _ in range(n_rows)], columns=attrs, index=VAR_VALUES[VAR_OF_INTEREST]),
     }
 }
@@ -193,10 +197,12 @@ for test_dist in ('test-in', 'test-out'):
             if test_dist == 'test-in':
                 full_results[test_dist]['recog-both'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies, r['name'], attr, 'recog_acc')))
                 full_results[test_dist]['recog-swap-cond'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies, r['name'], attr, 'swap_acc_cond')))
+                full_results[test_dist]['recog-swap-cond2'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies, r['name'], attr, 'swap_acc_cond_obj')))
                 full_results[test_dist]['recog-swap-uncond'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies, r['name'], attr, 'swap_acc_uncond')))
             else:
                 full_results[test_dist]['recog-both'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies_out, r['name'], attr, 'recog_acc')))
                 full_results[test_dist]['recog-swap-cond'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies_out, r['name'], attr, 'swap_acc_cond')))
+                full_results[test_dist]['recog-swap-cond2'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies, r['name'], attr, 'swap_acc_cond_obj')))
                 full_results[test_dist]['recog-swap-uncond'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies_out, r['name'], attr, 'swap_acc_uncond')))
             # swap_skt1_acc_df.loc[r.config[VAR_OF_INTEREST], attr] = float(r.summary[f'binary-swap-skt1-test-in_{attr}'])
 
@@ -218,10 +224,15 @@ def process_df(df_, distr):
 
     return df_
 
+def std_error(vals):
+    valid_vals = [x_val for x_val in vals if not np.isnan(x_val)]
+    if len(valid_vals) == 0:
+        return np.nan
+    return np.std(valid_vals, ddof=1) / np.sqrt(len(valid_vals))
 
 def process_distr_df(df_, distr):
     mean_df = process_df(df_.map(lambda x: np.mean([x_val for x_val in x if not np.isnan(x_val)]) if isinstance(x, list) else x), distr)
-    std_df = process_df(df_.map(lambda x: np.std([x_val for x_val in x if not np.isnan(x_val)]) if isinstance(x, list) else x), distr)
+    std_df = process_df(df_.map(lambda x:  std_error(x) if isinstance(x, list) else x), distr)
     return mean_df, std_df
 
 
@@ -239,7 +250,7 @@ print(underlying_recog_df)
 print(underlying_df)
 
 for test_dist in ('test-in', 'test-out'):
-    for metric in ('swap-mid-acc', 'swap-skt1-acc', 'recog-multi', 'recog-both', 'recog-swap-cond', 'recog-swap-uncond'):
+    for metric in ('swap-mid-acc', 'swap-skt1-acc', 'recog-multi', 'recog-both', 'recog-swap-cond', 'recog-swap-cond2', 'recog-swap-uncond'):
         full_results[test_dist][metric] = process_distr_df(full_results[test_dist][metric], test_dist)
 
 mean_df = full_results['test-in'][SWAP_METRIC][0]

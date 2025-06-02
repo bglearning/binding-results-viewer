@@ -13,59 +13,21 @@ def plot_fig_new(df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist='
 
     # Plot each attribute
     for i, attr in enumerate(attributes):
-        attr_data = df[df['attribute'] == attr]
-        
-        # Separate normal and low recognition points
-        normal_data = attr_data[~attr_data['low_recognition']]
-        # low_rec_data = attr_data[attr_data['low_recognition']]
-        low_rec_data = attr_data
-        
-        # Plot low recognition points with visual caveats
-        if not low_rec_data.empty:
-            # Hollow markers with dashed lines for low recognition
-            ax.errorbar(low_rec_data['x'], low_rec_data['y'], 
-                    yerr=low_rec_data['error'],
-                    color=colors[i], linestyle=':', 
-                    marker='o', markersize=8, linewidth=1.5,
-                    capsize=4, capthick=1, alpha=0.6,
-                    markerfacecolor='white', markeredgecolor=colors[i],
-                    markeredgewidth=2)
+        attr_data = df[df['attribute'] == attr].copy()
 
-        # Plot normal points in continuous segments
-        attr_indices = attr_data['x'].tolist()
-        if not normal_data.empty:
-            # Find continuous segments based on attr_indices
-            normal_x_values = normal_data['x'].tolist()
-            segments = []
-            current_segment_indices = []
-            
-            for attr_idx in attr_indices:
-                if attr_idx in normal_x_values:
-                    # This x value has normal recognition
-                    row_idx = normal_data[normal_data['x'] == attr_idx].index[0]
-                    current_segment_indices.append(row_idx)
-                else:
-                    # Gap found - end current segment if it exists
-                    if current_segment_indices:
-                        segments.append(current_segment_indices)
-                        current_segment_indices = []
-            
-            # Add the last segment if it exists
-            if current_segment_indices:
-                segments.append(current_segment_indices)
-            
-            # Plot each segment separately
-            for j, segment_indices in enumerate(segments):
-                if len(segment_indices) > 0:  # Only plot if segment has points
-                    segment_data = attr_data.loc[segment_indices]
-                    label = attr.replace('_', ' ').title() if j == 0 else None  # Only label first segment
-                    
-                    ax.errorbar(segment_data['x'], segment_data['y'], 
-                            yerr=segment_data['error'],
-                            color=colors[i], linestyle='-', 
-                            marker='o', markersize=8, linewidth=2.5,
-                            capsize=4, capthick=2, alpha=1.0,
-                            label=label)
+        attr_data['y'] = np.where(attr_data['low_recognition'], np.nan, attr_data['y'])
+        
+
+        ax.plot(attr_data['x'], attr_data['y'], 
+                color=colors[i], linewidth=2, linestyle='-', 
+                marker='o', markersize=7, 
+                markeredgewidth=2,
+                label=attr)
+
+        ax.fill_between(attr_data['x'], 
+                        attr_data['y'] - 1.96 * attr_data['error'], 
+                        attr_data['y'] + 1.96 * attr_data['error'],
+                        color=colors[i], alpha=0.1)
 
     # Calculate and plot average line
     avg_data = df[df['attribute'] == 'Average']
@@ -77,8 +39,8 @@ def plot_fig_new(df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist='
             label='Average', zorder=10)
 
     ax.fill_between(avg_data['x'], 
-                    avg_data['y'] - avg_data['error'], 
-                    avg_data['y'] + avg_data['error'],
+                    avg_data['y'] - 1.96 * avg_data['error'], 
+                    avg_data['y'] + 1.96 * avg_data['error'],
                     color='black', alpha=0.1, zorder=5)
 
     # Add chance level line (no text label, will be in legend)
