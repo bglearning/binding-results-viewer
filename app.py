@@ -95,10 +95,10 @@ RECOG_METRIC = {
 VAR_VALUES = {
     # 'TRAIN_CAPTION_MODE': ['skewed_to_zero', 'skewed_to_one', 'high_two', 'high_two_five', 'high_five', 'skewed_to_full'],
     'TRAIN_CAPTION_MODE': ['skewed_to_zero', 'skewed_to_one', 'high_two', 'high_two_five', 'high_five', 'skewed_to_full'],
-    # 'CAPTION_OBJECT_INCLUSION_PROB': [0.1, 0.25, 0.5, 0.75, 0.9, 1.],
-    'CAPTION_OBJECT_INCLUSION_PROB': [0.25, 0.5, 0.75, 1.],
-    # 'IMG_OBJECT_INCLUSION_PROB': [0.1, 0.25, 0.5, 0.75, 0.9, 1.],
-    'IMG_OBJECT_INCLUSION_PROB': [0.25, 0.5, 0.75, 1.],
+    # 'CAPTION_OBJECT_INCLUSION_PROB': [0.25, 0.5, 0.75, 0.9, 1.],
+    'CAPTION_OBJECT_INCLUSION_PROB': [0.1, 0.25, 0.5, 0.75, 1.],
+    'IMG_OBJECT_INCLUSION_PROB': [0.1, 0.25, 0.5, 0.75, 0.9, 1.],
+    # 'IMG_OBJECT_INCLUSION_PROB': [0.25, 0.5, 0.75, 1.],
     'SALIENCY_PROB': [0.0, 0.25, 0.5, 0.75, 0.9, 0.95, 1.0],
 }
 
@@ -228,19 +228,51 @@ def process_df(df_, distr):
     if df_.empty:
         return df_
 
-    df_['Average'] = df_[[col for col in df_.columns if col != 'object']].mean(axis=1)
+    # df_['Average'] = df_[[col for col in df_.columns if col != 'object']].mean(axis=1)
 
     return df_
 
 def std_error(vals):
-    valid_vals = [x_val for x_val in vals if not np.isnan(x_val)]
-    if len(valid_vals) == 0:
+    vals= [val for val in vals if not np.isnan(val)]
+    if len(vals) == 0:
         return np.nan
-    return np.std(valid_vals, ddof=1) / np.sqrt(len(valid_vals))
+    return np.std(vals, ddof=1) / np.sqrt(len(vals))
+
+def row_std_error(row):
+    flat_list = []
+    for sublist in row:
+        if isinstance(sublist, list):
+            flat_list.extend(sublist)
+        elif not np.isnan(sublist):
+            flat_list.append(sublist)
+    return std_error(flat_list)
+
+def mean_val(vals):
+    vals= [val for val in vals if not np.isnan(val)]
+    if len(vals) == 0:
+        return np.nan
+    return np.mean(vals)
+
+def row_mean(row):
+    flat_list = []
+    for sublist in row:
+        if isinstance(sublist, list):
+            flat_list.extend(sublist)
+        elif not np.isnan(sublist):
+            flat_list.append(sublist)
+    return mean_val(flat_list)
+
 
 def process_distr_df(df_, distr):
-    mean_df = process_df(df_.map(lambda x: np.mean([x_val for x_val in x if not np.isnan(x_val)]) if isinstance(x, list) else x), distr)
+    attr_cols = [col for col in df_.columns if col != 'object']
+    mean_vals = df_[attr_cols].apply(row_mean, axis=1)
+    se_vals = df_[attr_cols].apply(row_std_error, axis=1)
+
+    mean_df = process_df(df_.map(lambda x: mean_val(x) if isinstance(x, list) else x), distr)
+    mean_df['Average'] = mean_vals
+
     std_df = process_df(df_.map(lambda x:  std_error(x) if isinstance(x, list) else x), distr)
+    std_df['Average'] = se_vals
     return mean_df, std_df
 
 
@@ -257,9 +289,29 @@ underlying_recog_df = (
 print(underlying_recog_df)
 print(underlying_df)
 
+recog_dfs = {
+    'test-in': full_results['test-in']['recog-both'],
+    'test-out': full_results['test-out']['recog-both'],
+}
+
+def mean_with_nan(vals):
+    vals = [v for v in vals if not pd.isnull(v)]
+    if len(vals) == 0:
+        return np.nan
+    return np.mean(vals)
+
 for test_dist in ('test-in', 'test-out'):
     for metric in ('swap-mid-acc', 'swap-skt1-acc', 'recog-multi', 'recog-both', 'recog-swap-cond', 'recog-swap-uncond'):
-        full_results[test_dist][metric] = process_distr_df(full_results[test_dist][metric], test_dist)
+        vals_df = full_results[test_dist][metric]
+        if metric == 'recog-swap-cond':
+            recog_df = recog_dfs[test_dist]
+            for col, thresh in ATTRIBUTE_CHANCE_RECOG_THRESHOLD.items():
+                if col == 'Average':
+                    continue
+                recog_df[col] = recog_df[col].where((recog_df[col].map(mean_with_nan)) >= thresh, np.nan)
+            vals_df = vals_df.where(~recog_df.isna(), [np.nan])
+
+        full_results[test_dist][metric] = process_distr_df(vals_df, test_dist)
 
 mean_df = full_results['test-in'][SWAP_METRIC][0]
 std_df = full_results['test-in'][SWAP_METRIC][1]
