@@ -4,7 +4,7 @@ import seaborn as sns
 
 
 
-def plot_fig_new(df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist='test-in'):
+def plot_fig_new(df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist='test-in', chance_level=None):
 
     attributes = [a for a in df['attribute'].unique() if a != 'Average']
 
@@ -44,7 +44,8 @@ def plot_fig_new(df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist='
                     color='black', alpha=0.1, zorder=5)
 
     # Add chance level line (no text label, will be in legend)
-    ax.axhline(y=0.5, color='gray', linestyle='--', linewidth=2, alpha=0.8, zorder=1)
+    if chance_level is not None:
+        ax.axhline(y=chance_level, color='gray', linestyle='--', linewidth=2, alpha=0.8, zorder=1)
 
     # Customize the plot
     ax.set_xlabel(xlabel, fontsize=26, fontweight='bold')
@@ -82,10 +83,11 @@ def plot_fig_new(df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist='
                                     label='Average'))
 
     # Add chance level (square marker)
-    legend_elements.append(plt.Line2D([0], [0], color='gray', linestyle='--', 
-                                    marker=None, markersize=8, linewidth=2,
-                                    markerfacecolor='gray', markeredgecolor='gray',
-                                    label='Chance Level'))
+    if chance_level is not None:
+        legend_elements.append(plt.Line2D([0], [0], color='gray', linestyle='--', 
+                                        marker=None, markersize=8, linewidth=2,
+                                        markerfacecolor='gray', markeredgecolor='gray',
+                                        label='Chance Level'))
 
     # Add recognition caveat indicators
     # legend_elements.append(plt.Line2D([0], [0], color='gray', linestyle=':', 
