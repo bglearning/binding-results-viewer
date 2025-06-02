@@ -25,7 +25,7 @@ def all_runs_acc():
         recog_swap_accuracies = json.load(f)
     with open("recog-swap-accuracies-test-in_06-01-v2b.json") as f:
         recog_accuracies = json.load(f)
-    with open("recog-swap-accuracies-test-out_05_26_full.json") as f:
+    with open("recog-swap-accuracies-test-out_06_01_full.json") as f:
         recog_swap_accuracies_out = json.load(f)
     return recog_swap_accuracies, recog_accuracies, recog_swap_accuracies_out
 
@@ -422,6 +422,8 @@ if len(sel_runs) > 0:
             std_df_binding=std_df_recog,
             recognition_thresholds=ATTRIBUTE_CHANCE_RECOG_THRESHOLD,
         )
+        if dist == 'test-out':
+            df_recog = df_recog[df_recog['attribute'].isin(['color', 'object', 'scaling'])].copy()
         plot_fig_new(
             df_recog,
             ax=ax_,
@@ -452,6 +454,8 @@ if len(sel_runs) > 0:
             recognition_thresholds=ATTRIBUTE_CHANCE_RECOG_THRESHOLD,
         )
         df = df[df['attribute'] != 'object'].copy()
+        if dist == 'test-out':
+            df = df[df['attribute'].isin(['color', 'scaling'])].copy()
 
         print('Unique x', df['x'].unique())
 
