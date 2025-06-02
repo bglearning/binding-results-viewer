@@ -175,6 +175,17 @@ for dist_name, dist in CAPTION_MODE_NUM_ATTR_DISTS.items():
     expected_num = sum(i * p for i, p in enumerate(dist))
     EXPECTED_NUM_ATTRS[dist_name] = expected_num
 
+ATTRIBUTE_CHANCE_RECOG_THRESHOLD = {
+    "thick_thinning" : 1 / 3,
+    "swelling" : 1 / 2,
+    "fracture" : 1 / 2,
+    "scaling" : 1 / 2,
+    "rotation": 1 / 3,
+    "color" : 1 / 7,
+    "object": 1 / 10,
+    "Average": 0.,
+}
+
 def get_attr_metric(recog_swap_accuracies_, wandb_name, attr, metric):
     if wandb_name not in recog_swap_accuracies_:
         return np.nan
@@ -292,7 +303,7 @@ def plot_fig(data_df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist=
 
 def convert_wide_to_plot_format(
     mdf_recog, std_df_recog, mdf_binding, std_df_binding, 
-    recognition_threshold=0.6):
+    recognition_thresholds):
     
     data_list = []
     
@@ -303,6 +314,7 @@ def convert_wide_to_plot_format(
     
     # Process each attribute
     for attr in all_attributes:
+        recognition_threshold = recognition_thresholds[attr]
         for x_val in x_values:
             # Get binding accuracy and error
             binding_acc = mdf_binding.loc[x_val, attr]
@@ -353,17 +365,25 @@ if len(sel_runs) > 0:
         mdf_recog, std_df_recog = full_results[dist][RECOG_METRIC]
 
         ax_ = axes[0, i] if len(dists_to_plot) > 1 else axes[0]
-        plot_fig(
-            mdf_recog,
-            xlabel='',
-            ylabel="Recognition (multi-object-scene) " if i == 0 else '',
+        # Convert your data
+        df_recog = convert_wide_to_plot_format(
+            mdf_recog=mdf_recog,
+            std_df_recog=std_df_recog, 
+            mdf_binding=mdf_recog,
+            std_df_binding=std_df_recog,
+            recognition_thresholds=ATTRIBUTE_CHANCE_RECOG_THRESHOLD,
+        )
+        plot_fig_new(
+            df_recog,
             ax=ax_,
-            title=f'{dist_label}-distribution',
+            xlabel='',
+            ylabel="Recognition" if i == 0 else '',
+            # title=f'Effect of {X_LABEL} on Binding \nb{batch_size} e{embed_dim}',
+            title=f'Effect of {X_LABEL} on Attribute Recognition',
             xlims=X_LIMS,
-            ylims=(0, 1.01),
+            ylims=(0., 1.01),
             xtick=True,
             dist=dist,
-            errs_df=std_df_recog,
         )
         mdf_, std_df_ = full_results[dist][SWAP_METRIC]
         # mdf_ = pd.DataFrame(np.where(mdf_recog.loc[mdf.index, mdf.columns] > RECOG_ACC_LIMIT, mdf.values, np.nan), columns=mdf.columns, index=mdf.index)
@@ -380,7 +400,7 @@ if len(sel_runs) > 0:
             std_df_recog=std_df_recog, 
             mdf_binding=mdf_,  # Your binding accuracy dataframe
             std_df_binding=std_df_,  # Your binding std dataframe
-            recognition_threshold=0.5
+            recognition_thresholds=ATTRIBUTE_CHANCE_RECOG_THRESHOLD,
         )
 
         print('Unique x', df['x'].unique())
