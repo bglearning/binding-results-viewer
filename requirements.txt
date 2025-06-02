@@ -2,4 +2,5 @@ altair==4.0.0
 matplotlib
 numpy
 pandas
+seaborn
 streamlit==1.12.0
