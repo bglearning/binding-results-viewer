@@ -230,8 +230,7 @@ def process_df(df_, distr):
     if df_.empty:
         return df_
 
-    df_ = df_.drop(columns=['object'])
-    df_['Average'] = df_[[col for col in df_.columns]].mean(axis=1)
+    df_['Average'] = df_[[col for col in df_.columns if col != 'object']].mean(axis=1)
 
     return df_
 
@@ -402,6 +401,7 @@ if len(sel_runs) > 0:
             std_df_binding=std_df_,  # Your binding std dataframe
             recognition_thresholds=ATTRIBUTE_CHANCE_RECOG_THRESHOLD,
         )
+        df = df[df['attribute'] != 'object'].copy()
 
         print('Unique x', df['x'].unique())
 
