@@ -47,14 +47,15 @@ def plot_fig_new(df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist='
     ax.axhline(y=0.5, color='gray', linestyle='--', linewidth=2, alpha=0.8, zorder=1)
 
     # Customize the plot
-    ax.set_xlabel(xlabel, fontsize=20, fontweight='bold')
-    ax.set_ylabel(ylabel, fontsize=20, fontweight='bold')
-    ax.set_title(title, fontsize=22, fontweight='bold', pad=20)
+    ax.set_xlabel(xlabel, fontsize=26, fontweight='bold')
+    ax.set_ylabel(ylabel, fontsize=26, fontweight='bold')
+    ax.set_title(title, fontsize=30, fontweight='bold', pad=20)
 
     # Set axis limits and ticks
     ax.set_xlim(xlims)
     ax.set_ylim(ylims)
     # ax.set_xticks([0.1, 0.25, 0.5, 0.75, 1.0])
+    ax.tick_params(axis='both', which='major', labelsize=20)
     if xtick:
         # ticks = [(x if x != 0.95 else None) for x in data_df.index.unique().tolist()]
         ticks = [x for x in df['x'].unique().tolist()]
@@ -95,8 +96,8 @@ def plot_fig_new(df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist='
 
     # Create two-column legend
     # legend1 = ax.legend(handles=legend_elements[:-1], loc='upper left', 
-    legend1 = ax.legend(handles=legend_elements, loc='upper left', 
-                    bbox_to_anchor=(0.02, 0.98), frameon=True, 
+    legend1 = ax.legend(handles=legend_elements, loc='lower left', 
+                    bbox_to_anchor=(0.02, 0.02), frameon=True, 
                     fancybox=True, shadow=True, ncol=1, fontsize=11)
     legend1.get_frame().set_facecolor('white')
     legend1.get_frame().set_alpha(0.9)
