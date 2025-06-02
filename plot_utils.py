@@ -100,7 +100,7 @@ def plot_fig_new(df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist='
     # legend1 = ax.legend(handles=legend_elements[:-1], loc='upper left', 
     legend1 = ax.legend(handles=legend_elements, loc='lower left', 
                     bbox_to_anchor=(0.02, 0.02), frameon=True, 
-                    fancybox=True, shadow=True, ncol=1, fontsize=11)
+                    fancybox=True, shadow=True, ncol=1, fontsize=18)
     legend1.get_frame().set_facecolor('white')
     legend1.get_frame().set_alpha(0.9)
 
