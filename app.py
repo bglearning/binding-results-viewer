@@ -27,10 +27,12 @@ def all_runs_acc():
         recog_accuracies = json.load(f)
     with open("recog-swap-accuracies-test-out_06_01_full.json") as f:
         recog_swap_accuracies_out = json.load(f)
-    return recog_swap_accuracies, recog_accuracies, recog_swap_accuracies_out
+    with open("recog-swap-accuracies_test-out-E32-b16_06_03.json") as f:
+        recog_accuracies_out = json.load(f)
+    return recog_swap_accuracies, recog_accuracies, recog_swap_accuracies_out, recog_accuracies_out
 
 wandb_results = all_runs()
-recog_swap_accuracies, recog_accuracies, recog_swap_accuracies_out = all_runs_acc()
+recog_swap_accuracies, recog_accuracies, recog_swap_accuracies_out, recog_accuracies_out = all_runs_acc()
 
 # Sidebar for controls
 st.sidebar.header("Filter Controls")
@@ -210,7 +212,7 @@ for test_dist in ('test-in', 'test-out'):
                 full_results[test_dist]['recog-swap-cond'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies, r['name'], attr, 'swap_acc_cond')))
                 full_results[test_dist]['recog-swap-uncond'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies, r['name'], attr, 'swap_acc_uncond')))
             else:
-                full_results[test_dist]['recog-both'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies_out, r['name'], attr, 'recog_acc')))
+                full_results[test_dist]['recog-both'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_accuracies_out, r['name'], attr, 'recog_acc')))
                 full_results[test_dist]['recog-swap-cond'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies_out, r['name'], attr, 'swap_acc_cond')))
                 full_results[test_dist]['recog-swap-uncond'].loc[r['config'][VAR_OF_INTEREST], attr].append(float(get_attr_metric(recog_swap_accuracies_out, r['name'], attr, 'swap_acc_uncond')))
             # swap_skt1_acc_df.loc[r.config[VAR_OF_INTEREST], attr] = float(r.summary[f'binary-swap-skt1-test-in_{attr}'])
@@ -284,6 +286,16 @@ underlying_df = (
 )
 underlying_recog_df = (
    full_results['test-in'][RECOG_METRIC].map(lambda x: ','.join([f'{v:.3f}' for v in x])).T
+)
+
+print(underlying_recog_df)
+print(underlying_df)
+
+underlying_df = (
+   full_results['test-out'][SWAP_METRIC].map(lambda x: ','.join([f'{v:.3f}' for v in x])).T
+)
+underlying_recog_df = (
+   full_results['test-out'][RECOG_METRIC].map(lambda x: ','.join([f'{v:.3f}' for v in x])).T
 )
 
 print(underlying_recog_df)
@@ -414,6 +426,8 @@ if len(sel_runs) > 0:
         mdf_recog, std_df_recog = full_results[dist][RECOG_METRIC]
 
         ax_ = axes[0, i] if len(dists_to_plot) > 1 else axes[0]
+        if dist == 'test-out':
+            print(mdf_recog['scaling'])
         # Convert your data
         df_recog = convert_wide_to_plot_format(
             mdf_recog=mdf_recog,
@@ -423,7 +437,11 @@ if len(sel_runs) > 0:
             recognition_thresholds=ATTRIBUTE_CHANCE_RECOG_THRESHOLD,
         )
         if dist == 'test-out':
+            print(df_recog['attribute'].unique())
             df_recog = df_recog[df_recog['attribute'].isin(['color', 'object', 'scaling'])].copy()
+            print(df_recog['attribute'].unique())
+            print(df_recog.groupby(by='attribute')['y'].mean())
+            print(df_recog[df_recog['attribute'] == 'scaling'])
         plot_fig_new(
             df_recog,
             ax=ax_,

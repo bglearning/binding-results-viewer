@@ -3,12 +3,27 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
+ATTRIBUTES_ALL = [
+    'color', 'scaling', 'fracture', 'rotation', 'thick_thinning',
+    'skip1', 'skip2', 'object', 'swelling', 
+]
+COLORS = sns.color_palette("bright", len(ATTRIBUTES_ALL))
+ATTR_TO_COLOR = {a: c for a, c in zip(ATTRIBUTES_ALL, COLORS)}
 
-def plot_fig_new(df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist='test-in', chance_level=None):
+def plot_fig_new(
+    df,
+    ax,
+    xlabel, ylabel, title,
+    xlims, ylims,
+    xtick=True,
+    dist='test-in',
+    chance_level=None,
+    second_avg_df=None,
+    avg_labels=None
+):
 
     attributes = [a for a in df['attribute'].unique() if a != 'Average']
 
-    colors = sns.color_palette("husl", len(attributes))
     df = df.sort_values(by='x')
 
     # Plot each attribute
@@ -17,31 +32,45 @@ def plot_fig_new(df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist='
 
         attr_data['y'] = np.where(attr_data['low_recognition'], np.nan, attr_data['y'])
         
-
         ax.plot(attr_data['x'], attr_data['y'], 
-                color=colors[i], linewidth=2, linestyle='-', 
-                marker='o', markersize=7, 
+                color=ATTR_TO_COLOR[attr], linewidth=2.5, linestyle='-', 
+                marker='o', markersize=7, alpha=0.6,
                 markeredgewidth=2,
                 label=attr)
 
         ax.fill_between(attr_data['x'], 
                         attr_data['y'] - 1.96 * attr_data['error'], 
                         attr_data['y'] + 1.96 * attr_data['error'],
-                        color=colors[i], alpha=0.1)
+                        color=ATTR_TO_COLOR[attr], alpha=0.1)
 
-    # Calculate and plot average line
     avg_data = df[df['attribute'] == 'Average']
 
+    avg_label = 'Average' if avg_labels is None else avg_labels[0]
+
     ax.plot(avg_data['x'], avg_data['y'], 
-            color='black', linewidth=3, linestyle='-', 
+            color='black', linewidth=6, linestyle='-', 
             marker='D', markersize=10, markerfacecolor='white', 
             markeredgecolor='black', markeredgewidth=2,
-            label='Average', zorder=10)
-
+            label=avg_label, zorder=10)
     ax.fill_between(avg_data['x'], 
                     avg_data['y'] - 1.96 * avg_data['error'], 
                     avg_data['y'] + 1.96 * avg_data['error'],
                     color='black', alpha=0.1, zorder=5)
+
+    if second_avg_df is not None:
+        second_avg_df = second_avg_df.sort_values(by='x')
+        second_avg_data = second_avg_df[second_avg_df['attribute'] == 'Average']
+        second_avg_label = 'Average-2' if avg_labels is None else avg_labels[1]
+        ax.plot(second_avg_data['x'], second_avg_data['y'], 
+                color='indigo', linewidth=6, linestyle='--', 
+                marker='D', markersize=10, markerfacecolor='white', 
+                markeredgecolor='indigo', markeredgewidth=2,
+                label=second_avg_label, zorder=10)
+        ax.fill_between(second_avg_data['x'], 
+                        second_avg_data['y'] - 1.96 * second_avg_data['error'], 
+                        second_avg_data['y'] + 1.96 * second_avg_data['error'],
+                        color='black', alpha=0.1, zorder=5)
+
 
     # Add chance level line (no text label, will be in legend)
     if chance_level is not None:
@@ -55,12 +84,14 @@ def plot_fig_new(df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist='
     # Set axis limits and ticks
     ax.set_xlim(xlims)
     ax.set_ylim(ylims)
+    ax.spines[['right', 'top']].set_visible(False)
     # ax.set_xticks([0.1, 0.25, 0.5, 0.75, 1.0])
-    ax.tick_params(axis='both', which='major', labelsize=20)
+    ax.tick_params(axis='both', which='major', labelsize=24)
     if xtick:
         # ticks = [(x if x != 0.95 else None) for x in data_df.index.unique().tolist()]
-        ticks = [x for x in df['x'].unique().tolist()]
-        ax.set_xticks(ticks)
+        ticks = [round(x, 2) for x in df['x'].unique().tolist()]
+        tick_labels = [(f'{x:.2f}' if x != 0.95 else '') for x in ticks]
+        ax.set_xticks(ticks, labels=tick_labels)
     # ax.set_yticks(np.arange(0.5, 1.1, 0.1))
 
     # Improve grid
@@ -71,21 +102,27 @@ def plot_fig_new(df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist='
     legend_elements = []
     # Add attribute lines to legend (all with circle markers, different colors)
     for i, attr in enumerate(attributes):
-        legend_elements.append(plt.Line2D([0], [0], color=colors[i], 
+        legend_elements.append(plt.Line2D([0], [0], color=ATTR_TO_COLOR[attr], 
                                         linestyle='-', marker='o',
-                                        markersize=8, linewidth=2.5,
+                                        markersize=8, linewidth=3,
                                         label=attr.replace('_', ' ').title()))
 
     # Add average line (diamond marker)
     legend_elements.append(plt.Line2D([0], [0], color='black', linestyle='-', 
-                                    marker='D', markersize=10, linewidth=3,
+                                    marker='D', markersize=10, linewidth=8,
                                     markerfacecolor='white', markeredgecolor='black',
-                                    label='Average'))
+                                    label=avg_label))
+    if second_avg_df is not None:
+        second_avg_label = 'Average-2' if avg_labels is None else avg_labels[1]
+        legend_elements.append(plt.Line2D([0], [0], color='indigo', linestyle='--', 
+                                        marker='D', markersize=10, linewidth=8,
+                                        markerfacecolor='white', markeredgecolor='indigo',
+                                        label=second_avg_label))
 
     # Add chance level (square marker)
     if chance_level is not None:
         legend_elements.append(plt.Line2D([0], [0], color='gray', linestyle='--', 
-                                        marker=None, markersize=8, linewidth=2,
+                                        marker=None, markersize=8, linewidth=3,
                                         markerfacecolor='gray', markeredgecolor='gray',
                                         label='Chance Level'))
 
@@ -99,8 +136,8 @@ def plot_fig_new(df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist='
     # Create two-column legend
     # legend1 = ax.legend(handles=legend_elements[:-1], loc='upper left', 
     legend1 = ax.legend(handles=legend_elements, loc='lower left', 
-                    bbox_to_anchor=(0.02, 0.02), frameon=True, 
-                    fancybox=True, shadow=True, ncol=1, fontsize=18)
+                    bbox_to_anchor=(0.02, 0.01), frameon=True, 
+                    fancybox=True, shadow=True, ncol=1, fontsize=20)
     legend1.get_frame().set_facecolor('white')
     legend1.get_frame().set_alpha(0.9)
 
@@ -130,5 +167,3 @@ def plot_fig_new(df, ax, xlabel, ylabel, title, xlims, ylims, xtick=True, dist='
 
     # Add subtle background color
     # ax.set_facecolor('#fafafa')
-
-    plt.show()
